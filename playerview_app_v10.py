@@ -256,10 +256,11 @@ def carica_dati_excel(percorso_file):
                         continue
                     
                     if col_name.startswith("Clip1_") or col_name.startswith("Clip2_"):
+                        esito = "P" if col_name.startswith("Clip1_") else "N"
                         principio = col_name.replace("Clip1_", "").replace("Clip2_", "")
                         if principio not in clip_data:
                             clip_data[principio] = []
-                        clip_data[principio].append(val_str)
+                        clip_data[principio].append({"url": val_str, "esito": esito})
                     else:
                         kpi_data[col_name] = val_str
                 
@@ -749,31 +750,38 @@ def mostra_giocatore(username, dati_excel, key_prefix=""):
         for principio, clip_list in clips.items():
             if clip_list:
                 with st.expander(f"📹 {principio} — {len(clip_list)} clip disponibili"):
-                    for clip_path in clip_list:
-                        esito_color = "#00e676" if "_P_" in clip_path else "#ff1744"
-                        esito_label = "P" if "_P_" in clip_path else "N"
-                        nome_clip = os.path.basename(clip_path).replace(".mp4", "").replace("_", " ")
+                    for clip_item in clip_list:
+                        # Supporta sia il nuovo formato {"url":..., "esito":...} che il vecchio stringa
+                        if isinstance(clip_item, dict):
+                            clip_path = clip_item["url"]
+                            esito_label = clip_item.get("esito", "P")
+                        else:
+                            clip_path = clip_item
+                            esito_label = "P"  # fallback
+                        
+                        esito_color = "#00e676" if esito_label == "P" else "#ff1744"
+                        nome_clip = f"{principio} — Esito {esito_label}"
+                        
                         st.markdown(f"""
                         <div style="background:#0d0d12; border-left:3px solid {esito_color}; padding:10px 14px; margin-bottom:8px;">
                             <span style="font-size:13px; color:#ffffff;">{nome_clip}</span>
                             <span style="background:rgba(255,255,255,0.05); color:{esito_color}; padding:2px 8px; font-size:10px; font-weight:700; margin-left:8px;">{esito_label}</span>
                         </div>
                         """, unsafe_allow_html=True)
+                        
                         if clip_path.startswith("http"):
-                            # Converti qualsiasi formato Drive in URL preview per iframe
+                            # Converti in URL preview per iframe
                             preview_url = clip_path
                             if "drive.google.com" in clip_path:
-                                # Estrai l'ID dal formato uc?export=download&id=ID
                                 if "id=" in clip_path:
                                     file_id = clip_path.split("id=")[-1].split("&")[0].strip()
                                     preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
-                                # Oppure dal formato /file/d/ID/view
                                 elif "/file/d/" in clip_path:
                                     file_id = clip_path.split("/file/d/")[1].split("/")[0]
                                     preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
                             
                             st.markdown(f"""
-                            <div style="border:1px solid #1e1e2a; border-radius:2px; overflow:hidden; margin-top:8px; margin-bottom:12px; background:#000;">
+                            <div style="border:1px solid #1e1e2a; border-radius:2px; overflow:hidden; margin-top:8px; margin-bottom:4px; background:#000;">
                                 <iframe 
                                     src="{preview_url}" 
                                     width="100%" 
@@ -784,14 +792,10 @@ def mostra_giocatore(username, dati_excel, key_prefix=""):
                                     style="display:block;"
                                 ></iframe>
                             </div>
-                            <div style="text-align:right; margin-top:-8px; margin-bottom:8px;">
+                            <div style="text-align:right; margin-bottom:12px;">
                                 <a href="{clip_path}" target="_blank" style="
-                                    color:#FF6B00;
-                                    font-size:10px;
-                                    font-weight:700;
-                                    letter-spacing:1px;
-                                    text-transform:uppercase;
-                                    text-decoration:none;
+                                    color:#FF6B00; font-size:10px; font-weight:700;
+                                    letter-spacing:1px; text-transform:uppercase; text-decoration:none;
                                 ">↗ Apri in Drive</a>
                             </div>
                             """, unsafe_allow_html=True)
