@@ -929,37 +929,76 @@ def main():
         mostra_login()
         return
     
-    # Cerca il file Excel
-    # Prova prima nella stessa cartella dello script, poi sul Desktop/Scrivania
-    possibili_percorsi = [
-        "Progetto_Tesi.xlsx",
-        os.path.join(os.path.dirname(__file__), "Progetto_Tesi.xlsx"),
-        os.path.expanduser("~/Desktop/Progetto_Tesi.xlsx"),
-        os.path.expanduser("~/Scrivania/Progetto_Tesi.xlsx"),
-    ]
-    
-    file_excel = None
-    for percorso in possibili_percorsi:
-        if os.path.exists(percorso):
-            file_excel = percorso
-            break
-    
-    if file_excel is None:
-        st.error("⚠️ File 'Progetto_Tesi.xlsx' non trovato. Mettilo nella stessa cartella di playerview_app.py")
-        if st.button("Esci"):
-            st.session_state["logged_in"] = False
-            st.rerun()
-        return
-    
-    # Carica dati
-    dati_excel = carica_dati_excel(file_excel)
-    
-    # Header
+    # ── GESTIONE FILE EXCEL ──────────────────────────────────────────────
+    # Il file Excel viene scaricato da Google Drive al primo accesso
+    # oppure quando si preme il tasto "Aggiorna Dati"
+
     username = st.session_state["username"]
     ruolo_utente = st.session_state["ruolo_utente"]
+
+    DRIVE_FILE_ID = "12qRBYLlnNRvL7QitKLZ8vZSc68sD1od9"
+    DRIVE_DOWNLOAD_URL = f"https://docs.google.com/spreadsheets/d/{DRIVE_FILE_ID}/export?format=xlsx"
+
+    def scarica_da_drive():
+        import requests
+        import io
+        try:
+            r = requests.get(DRIVE_DOWNLOAD_URL, timeout=15)
+            if r.status_code == 200:
+                st.session_state["excel_bytes"] = r.content
+                st.session_state["excel_ultimo_aggiornamento"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                return True
+            else:
+                return False
+        except Exception as e:
+            st.error(f"Errore nel download: {e}")
+            return False
+
+    # Scarica automaticamente al primo accesso
+    if "excel_bytes" not in st.session_state:
+        with st.spinner("Caricamento dati in corso..."):
+            scarica_da_drive()
+
+    # Tasto aggiorna nella sidebar (visibile a tutti)
+    with st.sidebar:
+        st.markdown("### 🔄 Dati")
+        ultimo = st.session_state.get("excel_ultimo_aggiornamento", "—")
+        st.markdown(f"<div style='font-size:11px; color:#888; margin-bottom:12px;'>Ultimo aggiornamento:<br><strong style='color:#FF6B00'>{ultimo}</strong></div>", unsafe_allow_html=True)
+        if st.button("🔄 Aggiorna Dati", use_container_width=True):
+            with st.spinner("Scaricamento in corso..."):
+                if scarica_da_drive():
+                    st.success("✅ Dati aggiornati!")
+                    st.rerun()
+                else:
+                    st.error("❌ Errore nel download. Riprova.")
+
+    # Carica dati da session state o fallback locale
+    import io
+    if "excel_bytes" in st.session_state:
+        dati_excel = carica_dati_excel(io.BytesIO(st.session_state["excel_bytes"]))
+    else:
+        possibili_percorsi = [
+            "Progetto_Tesi.xlsx",
+            os.path.join(os.path.dirname(__file__), "Progetto_Tesi.xlsx"),
+            os.path.expanduser("~/Desktop/Progetto_Tesi.xlsx"),
+            os.path.expanduser("~/Scrivania/Progetto_Tesi.xlsx"),
+        ]
+        file_excel = None
+        for percorso in possibili_percorsi:
+            if os.path.exists(percorso):
+                file_excel = percorso
+                break
+
+        if file_excel is None:
+            st.warning("⚠️ Dati non disponibili. Premi 'Aggiorna Dati' nel pannello laterale.")
+            if st.button("Esci"):
+                st.session_state["logged_in"] = False
+                st.rerun()
+            return
+
+        dati_excel = carica_dati_excel(file_excel)
     
     # Top bar premium
-    col_logo, col_info, col_logout = st.columns([1, 7, 1])
     col_logo, col_info, col_logout = st.columns([2, 6, 2])
     with col_logo:
         st.image(LOGO_PATH, width=48)
