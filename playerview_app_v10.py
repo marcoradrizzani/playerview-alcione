@@ -154,6 +154,39 @@ st.markdown("""
         color: #555 !important;
         margin-bottom: 16px !important;
     }
+
+    /* ── MOBILE RESPONSIVE ── */
+    @media (max-width: 768px) {
+        /* Logo login più piccolo */
+        .login-logo img { max-width: 80px !important; }
+
+        /* Titolo PlayerView più piccolo */
+        .playerview-title { font-size: 32px !important; }
+
+        /* Header giocatore */
+        .player-name { font-size: 28px !important; }
+
+        /* KPI cards: 2 per riga su mobile */
+        div[data-testid="column"] {
+            min-width: 45% !important;
+            flex: 1 1 45% !important;
+        }
+
+        /* Font più leggibili */
+        div[style*="font-size:44px"] { font-size: 32px !important; }
+        div[style*="font-size:42px"] { font-size: 30px !important; }
+        div[style*="font-size:38px"] { font-size: 26px !important; }
+
+        /* Padding ridotto */
+        .main .block-container {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+            padding-top: 16px !important;
+        }
+
+        /* Iframe clip più basso */
+        iframe { height: 200px !important; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -437,6 +470,81 @@ def grafico_kpi(kpi_list, key_suffix=""):
     )
     return fig
 
+def calcola_medie_stagionali(partite, ruolo):
+    """Calcola le medie stagionali per ogni KPI su tutte le partite disponibili."""
+    totali = {}
+    conteggi = {}
+    for p in partite:
+        kpi_list = parse_kpi(p["kpi_raw"], ruolo)
+        for k in kpi_list:
+            if k["tipo"] == "percentuale" and k["pct"] is not None:
+                nome = k["nome"]
+                totali[nome] = totali.get(nome, 0) + k["pct"]
+                conteggi[nome] = conteggi.get(nome, 0) + 1
+    return {nome: round(totali[nome] / conteggi[nome]) for nome in totali}
+
+def grafico_trend(partite, ruolo, key_suffix=""):
+    """Grafico a linee: andamento KPI partita per partita con media stagionale."""
+    if len(partite) < 2:
+        return None
+
+    # Raccoglie dati per ogni partita
+    labels = [f"{p['partita']}\n{p['data']}" for p in partite]
+    kpi_nomi = []
+    # Prende i nomi KPI dalla prima partita
+    for k in parse_kpi(partite[0]["kpi_raw"], ruolo):
+        if k["tipo"] == "percentuale":
+            kpi_nomi.append(k["nome"])
+
+    colori_linee = ["#FF6B00", "#00e676", "#00bcd4", "#ffea00", "#e040fb"]
+    medie = calcola_medie_stagionali(partite, ruolo)
+
+    fig = go.Figure()
+
+    for i, nome_kpi in enumerate(kpi_nomi):
+        valori = []
+        for p in partite:
+            kpi_list = parse_kpi(p["kpi_raw"], ruolo)
+            val = next((k["pct"] for k in kpi_list if k["nome"] == nome_kpi and k["tipo"] == "percentuale"), None)
+            valori.append(val)
+
+        colore = colori_linee[i % len(colori_linee)]
+
+        fig.add_trace(go.Scatter(
+            x=labels, y=valori,
+            mode='lines+markers',
+            name=nome_kpi,
+            line=dict(color=colore, width=2),
+            marker=dict(size=8, color=colore),
+            connectgaps=True,
+        ))
+
+        # Linea media stagionale tratteggiata
+        media = medie.get(nome_kpi)
+        if media is not None:
+            fig.add_shape(type="line",
+                x0=labels[0], x1=labels[-1], y0=media, y1=media,
+                line=dict(color=colore, width=1, dash="dot"),
+                xref="x", yref="y"
+            )
+
+    fig.update_layout(
+        plot_bgcolor='#0d0d12', paper_bgcolor='#050507',
+        font=dict(color='#ffffff', family='Inter'),
+        xaxis=dict(showgrid=False, tickfont=dict(color='#888', size=10)),
+        yaxis=dict(
+            range=[0, 110], ticksuffix='%',
+            showgrid=True, gridcolor='#1e1e2a',
+            tickfont=dict(color='#555', size=11),
+        ),
+        legend=dict(bgcolor='#0d0d12', bordercolor='#1e1e2a', borderwidth=1,
+                    font=dict(color='#888', size=11)),
+        margin=dict(l=20, r=20, t=20, b=40),
+        height=300,
+    )
+    return fig
+
+
 def grafico_torta(kpi_list, key_suffix=""):
     """Grafico a torta distribuzione positivi/negativi."""
     tot_pos = sum(k["ok"] for k in kpi_list if k["tipo"] == "percentuale")
@@ -475,18 +583,18 @@ def grafico_torta(kpi_list, key_suffix=""):
 # ── LOGIN ──────────────────────────────────────────────────────────────────
 
 def mostra_login():
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        c1, c2, c3 = st.columns([1.5, 1, 1.5])
+        c1, c2, c3 = st.columns([2, 1, 2])
         with c2:
-            st.image(LOGO_PATH, use_container_width=True)
+            st.image(LOGO_PATH, width=90)
         st.markdown("""
-        <div style="text-align:center; margin-top:16px; margin-bottom:32px;">
-            <div style="font-size:10px; font-weight:700; letter-spacing:5px; text-transform:uppercase; color:#FF6B00;">ALCIONE MILANO · STAGIONE 2025/26</div>
-            <div style="font-size:48px; font-weight:900; letter-spacing:4px; text-transform:uppercase; color:#ffffff; line-height:1; margin-top:8px;">PLAYER<span style="color:#FF6B00">VIEW</span></div>
-            <div style="font-size:11px; letter-spacing:3px; text-transform:uppercase; color:#444; margin-top:8px;">Piattaforma individuale di analisi video</div>
-            <div style="width:40px; height:2px; background:#FF6B00; margin:20px auto;"></div>
+        <div style="text-align:center; margin-top:8px; margin-bottom:24px;">
+            <div style="font-size:10px; font-weight:700; letter-spacing:4px; text-transform:uppercase; color:#FF6B00;">ALCIONE MILANO · 2025/26</div>
+            <div style="font-size:40px; font-weight:900; letter-spacing:3px; text-transform:uppercase; color:#ffffff; line-height:1; margin-top:6px;">PLAYER<span style="color:#FF6B00">VIEW</span></div>
+            <div style="font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#444; margin-top:6px;">Analisi video individuale</div>
+            <div style="width:40px; height:2px; background:#FF6B00; margin:16px auto;"></div>
         </div>
         """, unsafe_allow_html=True)
         st.markdown("---")
@@ -735,6 +843,54 @@ def mostra_giocatore(username, dati_excel, key_prefix=""):
     
     df_table = pd.DataFrame(rows)
     st.dataframe(df_table, use_container_width=True, hide_index=True)
+
+    # ── STAGIONALE ──
+    if len(partite) > 1:
+        st.markdown("---")
+        st.markdown("##### 📅 Riepilogo Stagionale")
+
+        medie_stagionali = calcola_medie_stagionali(partite, ruolo)
+
+        # Cards medie stagionali
+        cols_stag = st.columns(len(medie_stagionali))
+        bench = BENCHMARK.get(ruolo, {})
+        soglie_map = {info[0]: info[1] for info in bench.values() if info[1] is not None}
+
+        for i, (nome_kpi, media_pct) in enumerate(medie_stagionali.items()):
+            with cols_stag[i]:
+                soglia = soglie_map.get(nome_kpi)
+                colore = get_colore(media_pct, soglia)
+                color_map2 = {"green": "#00e676", "yellow": "#ffea00", "red": "#ff1744"}
+                c = color_map2[colore]
+                emoji = get_emoji(colore)
+                bench_text = f"Benchmark: {soglia}%" if soglia else ""
+                st.markdown(f"""
+                <div style="background:#1a1a1a; border-top:3px solid {c}; padding:18px 20px; margin-bottom:8px;">
+                    <div style="font-size:10px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:#888; margin-bottom:10px;">
+                        {emoji} {nome_kpi}<br>
+                        <span style="color:#555; font-size:9px;">MEDIA STAGIONALE</span>
+                    </div>
+                    <div style="font-family:'Barlow Condensed',sans-serif; font-weight:900; font-size:42px; color:{c}; line-height:1; margin-bottom:10px;">
+                        {media_pct}%
+                    </div>
+                    <div style="height:4px; background:#2a2a2a; border-radius:2px; margin-bottom:8px;">
+                        <div style="height:100%; width:{media_pct}%; background:{c}; border-radius:2px;"></div>
+                    </div>
+                    <div style="font-size:10px; color:#888;">{bench_text} &nbsp;·&nbsp; {len(partite)} partite</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Grafico trend
+        st.markdown("##### 📈 Trend Stagionale per KPI")
+        fig_trend = grafico_trend(partite, ruolo, key_suffix=f"{key_prefix}_{username}")
+        if fig_trend:
+            st.plotly_chart(fig_trend, use_container_width=True,
+                           key=f"trend_chart_{key_prefix}_{username}")
+            st.markdown("""
+            <div style="font-size:10px; color:#555; text-align:center; margin-top:-12px;">
+                Le linee tratteggiate indicano la media stagionale per ogni KPI
+            </div>
+            """, unsafe_allow_html=True)
 
     # ── ARCHIVIO CLIP ──
     st.markdown("---")
