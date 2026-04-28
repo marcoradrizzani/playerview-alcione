@@ -759,7 +759,43 @@ def mostra_giocatore(username, dati_excel, key_prefix=""):
                             <span style="background:rgba(255,255,255,0.05); color:{esito_color}; padding:2px 8px; font-size:10px; font-weight:700; margin-left:8px;">{esito_label}</span>
                         </div>
                         """, unsafe_allow_html=True)
-                        if os.path.exists(clip_path):
+                        if clip_path.startswith("http"):
+                            # Converti qualsiasi formato Drive in URL preview per iframe
+                            preview_url = clip_path
+                            if "drive.google.com" in clip_path:
+                                # Estrai l'ID dal formato uc?export=download&id=ID
+                                if "id=" in clip_path:
+                                    file_id = clip_path.split("id=")[-1].split("&")[0].strip()
+                                    preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
+                                # Oppure dal formato /file/d/ID/view
+                                elif "/file/d/" in clip_path:
+                                    file_id = clip_path.split("/file/d/")[1].split("/")[0]
+                                    preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
+                            
+                            st.markdown(f"""
+                            <div style="border:1px solid #1e1e2a; border-radius:2px; overflow:hidden; margin-top:8px; margin-bottom:12px; background:#000;">
+                                <iframe 
+                                    src="{preview_url}" 
+                                    width="100%" 
+                                    height="320"
+                                    frameborder="0"
+                                    allow="autoplay"
+                                    allowfullscreen
+                                    style="display:block;"
+                                ></iframe>
+                            </div>
+                            <div style="text-align:right; margin-top:-8px; margin-bottom:8px;">
+                                <a href="{clip_path}" target="_blank" style="
+                                    color:#FF6B00;
+                                    font-size:10px;
+                                    font-weight:700;
+                                    letter-spacing:1px;
+                                    text-transform:uppercase;
+                                    text-decoration:none;
+                                ">↗ Apri in Drive</a>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        elif os.path.exists(clip_path):
                             st.video(clip_path)
                         else:
                             st.caption(f"⚠ File non trovato: {clip_path}")
