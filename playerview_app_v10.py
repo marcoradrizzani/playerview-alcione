@@ -847,11 +847,10 @@ def mostra_giocatore(username, dati_excel, key_prefix=""):
     # ── STAGIONALE ──
     if len(partite) > 1:
         st.markdown("---")
-        st.markdown("##### 📅 Riepilogo Stagionale")
+        st.markdown("##### 📅 Medie Stagionali")
 
         medie_stagionali = calcola_medie_stagionali(partite, ruolo)
 
-        # Cards medie stagionali
         cols_stag = st.columns(len(medie_stagionali))
         bench = BENCHMARK.get(ruolo, {})
         soglie_map = {info[0]: info[1] for info in bench.values() if info[1] is not None}
@@ -879,18 +878,6 @@ def mostra_giocatore(username, dati_excel, key_prefix=""):
                     <div style="font-size:10px; color:#888;">{bench_text} &nbsp;·&nbsp; {len(partite)} partite</div>
                 </div>
                 """, unsafe_allow_html=True)
-
-        # Grafico trend
-        st.markdown("##### 📈 Trend Stagionale per KPI")
-        fig_trend = grafico_trend(partite, ruolo, key_suffix=f"{key_prefix}_{username}")
-        if fig_trend:
-            st.plotly_chart(fig_trend, use_container_width=True,
-                           key=f"trend_chart_{key_prefix}_{username}")
-            st.markdown("""
-            <div style="font-size:10px; color:#555; text-align:center; margin-top:-12px;">
-                Le linee tratteggiate indicano la media stagionale per ogni KPI
-            </div>
-            """, unsafe_allow_html=True)
 
     # ── ARCHIVIO CLIP ──
     st.markdown("---")
@@ -992,36 +979,34 @@ def mostra_staff(dati_excel):
         if not partite:
             continue
         
-        # Ultima partita
-        ultima = partite[-1]
-        ruolo = ultima["ruolo"]
-        kpi_list = parse_kpi(ultima["kpi_raw"], ruolo)
-        rating = calcola_rating(kpi_list)
-        
+        # Medie stagionali invece dell'ultima partita
+        ruolo = partite[-1]["ruolo"]
+        nome = partite[-1]["nome"]
+        medie = calcola_medie_stagionali(partite, ruolo)
+        bench = BENCHMARK.get(ruolo, {})
+        soglie_map = {info[0]: info[1] for info in bench.values() if info[1] is not None}
+
         row = {
-            "Giocatore": ultima["nome"],
+            "Giocatore": nome,
             "Ruolo": ruolo,
-            "Ultima Partita": ultima["partita"],
-            "Data": ultima["data"],
-            "Rating": rating,
+            "Partite": len(partite),
         }
-        
+
         alert_count = 0
-        for k in kpi_list:
-            if k["tipo"] != "percentuale":
-                continue
-            colore = get_colore(k["pct"], k["soglia"])
+        for nome_kpi, media_pct in medie.items():
+            soglia = soglie_map.get(nome_kpi)
+            colore = get_colore(media_pct, soglia)
             emoji = get_emoji(colore)
-            row[k["nome"]] = f"{emoji} {k['pct']}%"
+            row[nome_kpi] = f"{emoji} {media_pct}%"
             if colore == "red":
                 alert_count += 1
-                alerts.append(f"**{ultima['nome']}** — {k['nome']} sotto soglia ({k['pct']}% vs benchmark {k['soglia']}%)")
-        
+                alerts.append(f"**{nome}** — {nome_kpi} sotto soglia ({media_pct}% vs benchmark {soglia}%)")
+
         row["Stato"] = "🔴 ALERT" if alert_count > 0 else ("🟡 ATTENZIONE" if any(
-            get_colore(k["pct"], k["soglia"]) == "yellow"
-            for k in kpi_list if k["tipo"] == "percentuale"
+            get_colore(m, soglie_map.get(n)) == "yellow"
+            for n, m in medie.items()
         ) else "🟢 OK")
-        
+
         rows_coach.append(row)
     
     # Alert banner
@@ -1033,7 +1018,7 @@ def mostra_staff(dati_excel):
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("##### 📊 Monitoraggio Giocatori — Ultima Partita")
+    st.markdown("##### 📊 Monitoraggio Giocatori — Medie Stagionali")
     
     if rows_coach:
         df_coach = pd.DataFrame(rows_coach)
